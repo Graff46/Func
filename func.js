@@ -51,6 +51,7 @@ const id = idName => node => node.id = idName;
 const attrib = (attribName, attribValue) => node => node.setAttribute(attribName, attribValue);
 const exis = exisCond => node => Boolean(exisCond) ? null: node.remove();
 const style = styleObj => node => {for (const key in styleObj) node.style[key] = styleObj[key]};
+const value = val => node => node.value = val;
 
 class Func {
     constructor (inclData, callHandler) {
@@ -72,7 +73,7 @@ class Func {
                 set: (target, prop, value, ...args) => { 
                     let reflect = Reflect.set(target, prop, value, ...args);
                     if (!Func.__exceptedProps(prop)) 
-                        obj[Func.__subscribleVarName].get('set').forEach(itm => itm.__proxy_set(sourseProp ?? prop));
+                        obj[Func.__subscribleVarName].get('set').forEach(itm => itm.__proxy_set(sourseProp ?? prop, prop));
                     return reflect;
                 },
 
@@ -108,10 +109,36 @@ class __DOMElement {
         return this;
     }
 
+    binding = toMap();
+
+    valueBind (obj, handler) {
+        let wkey;
+        let inclObj = obj;
+        const setWkey = subj => new Proxy(subj, {
+            get: (tar, prop, ...args) => {
+                if (tar[prop] instanceof Object) {
+                    inclObj = (inclObj || tar)[prop];
+                    return setWkey(Reflect.get(tar, prop, ...args));
+                }
+                wkey = prop;
+                return Reflect.get(tar, prop, ...args);
+            }
+        });
+
+        this.__subscribleProp(obj, 'set');
+        const objValue = handler(setWkey(obj));
+        this.binding.getArr(wkey).push(() => this.elms.forEach(node => node.value = handler(obj)));
+        for (const node of this.elms) {
+            node.addEventListener('input', eve => inclObj[wkey] = eve.target.value);
+            node.value = objValue;
+        }
+    }
+
+    __prop2node = toMap();
+
     outIn (obj, handler) {
         this.sobj = obj;
         this.wrapHandler;
-        this.__prop2node = toMap();
         this.__lastSobjProp;
 
         for (const node of this.elms) { 
@@ -125,9 +152,9 @@ class __DOMElement {
                 this.__prop2node.getArr(k).push(clone);
                 this.__lastSobjProp = k;
 
-                this.__subscribleProp('set', 'del');
-               
-                this.wrapHandler(clone, this.__inclPropProxymer(this.sobj[k], clone), this.__inclPropProxymer(k, clone));
+                this.__subscribleProp(this.sobj, 'set', 'del');
+
+                this.wrapHandler(clone, this.sobj[k], k);
                 node.before(clone);
             }
             node.remove();
@@ -139,8 +166,8 @@ class __DOMElement {
         return (...funcs) => funcs.callAll(node);
     }
 
-    __subscribleProp(...events) { 
-        return events.forEach(event => this.sobj[Func.__subscribleVarName].get(event).add(this));
+    __subscribleProp(obj, ...events) { 
+        return events.forEach(event => obj[Func.__subscribleVarName].get(event).add(this));
     }
 
     __inclPropProxymer(obj, node) {
@@ -156,24 +183,27 @@ class __DOMElement {
         });
     }
 
-    __proxy_set(prop) {
-        let nodes = this.__prop2node.get(prop);
+    __proxy_set(prop, incProp) {
+        const nodes = this.__prop2node.get(prop);
         if (nodes)
             for (const node of nodes) 
                 this.wrapHandler(node, this.sobj[prop], prop);
         else {
             let primaryNode = this.__prop2node.get(this.__lastSobjProp);
-            let cloneNodes = primaryNode.map(node => node.cloneNode(true));
-            cloneNodes.forEach(newNode => this.wrapHandler(newNode, value, prop))
+            if (primaryNode) {
+                let cloneNodes = primaryNode.map(node => node.cloneNode(true));
+                cloneNodes.forEach(newNode => this.wrapHandler(newNode, value, prop))
 
-            primaryNode.forEach((node, i) => {
-                this.__prop2node.getArr(prop).push(cloneNodes[i]);
-                node.after(cloneNodes[i]); 
-            });
+                primaryNode.forEach((node, i) => {
+                    this.__prop2node.getArr(prop).push(cloneNodes[i]);
+                    node.after(cloneNodes[i]); 
+                });
+            }
         }
+        this.binding.get(incProp).callAll();
     }
 
-    __proxy_del() {
+    __proxy_del(prop) {
         let nodes = this.__prop2node.get(prop);
         if (nodes) 
             for (const node of nodes)
@@ -182,4 +212,3 @@ class __DOMElement {
 }
 
 const el = (selector, ...funcs) => new __DOMElement(selector, ...funcs);
-
