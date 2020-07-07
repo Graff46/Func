@@ -60,7 +60,7 @@ class Func {
     }
 
     static __subscribleVarName = '__subs';
-    static __isProxyVarName = 'isProxy';
+    static __isProxyVarName = '__isProxy';
     static __exceptedProps(propName) {
         return Boolean(([Func.__isProxyVarName, Func.__subscribleVarName].includes(propName)) || (propName in Object.prototype));
     }
@@ -68,7 +68,8 @@ class Func {
     __proxymer(obj, name) {
         Object.defineProperty(obj, Func.__subscribleVarName, {value: toMap({ set: toSet(), get: toSet(), del: toSet() })});
 
-        const setProxy = (sourseObj, sourseProp) => { 
+        const setProxy = (sourseObj, sourseProp) => {
+            Object.defineProperty(sourseObj, Func.__isProxyVarName, {value: true});
              return new Proxy(sourseObj, {
                 set: (target, prop, value, ...args) => { 
                     let reflect = Reflect.set(target, prop, value, ...args);
@@ -78,7 +79,7 @@ class Func {
                 },
 
                 get: (target, prop, ...args) => {
-                    if ((target[prop] instanceof Object) && (!Func.__exceptedProps(prop)))
+                    if ((target[prop] instanceof Object) && (!target[prop][Func.__isProxyVarName]) && (!Func.__exceptedProps(prop)))
                         return setProxy(Reflect.get(target, prop, ...args), sourseProp ?? prop);
                     return Reflect.get(target, prop, ...args);
                 },
@@ -168,19 +169,6 @@ class __DOMElement {
 
     __subscribleProp(obj, ...events) { 
         return events.forEach(event => obj[Func.__subscribleVarName].get(event).add(this));
-    }
-
-    __inclPropProxymer(obj, node) {
-        if (!(obj instanceof Object)) return obj;
-        
-        return new Proxy(obj, {
-            get: (target, prop, ...args) => {
-                this.__prop2node.getArr(prop).push(node);
-                if (target[prop] instanceof Object)
-                    return this.__inclPropProxymer(Reflect.get(target, prop, ...args), node);
-                return Reflect.get(target, prop, ...args);
-            }
-        });
     }
 
     __proxy_set(prop, incProp) {
