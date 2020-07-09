@@ -75,7 +75,7 @@ class Func {
                     let reflect = Reflect.set(target, prop, value, ...args);
                     Object.defineProperty(sourseObj, Func.__isProxyVarName, {value: true});
                     if (!Func.__exceptedProps(prop)) 
-                        obj[Func.__subscribleVarName].get('set').forEach(itm => itm.__proxy_set(sourseProp ?? prop, prop, [prop].concat(stackKeys) ));
+                        obj[Func.__subscribleVarName].get('set').forEach(itm => itm.__proxy_set(sourseProp ?? prop, [prop].concat(stackKeys) ));
                     return reflect;
                 },
 
@@ -118,6 +118,7 @@ class __DOMElement {
     }
 
     bindStor = toMap();
+    bindEventListenerStor = toMap();
 
     bind (obj, handler) {
         let wkey = [];
@@ -137,7 +138,7 @@ class __DOMElement {
         this.__subscribleProp(obj, 'set');
         
         const sobj = setWkey(obj); 
-        let idx = 0
+        let idx = 0;
         for (const node of this.elms) {
             inclObj = obj;
             wkey = [];
@@ -146,9 +147,22 @@ class __DOMElement {
             let [subj, key] = [inclObj, wkey[0]];
             let storI = idx;
             this.bindStor.getArr(wkey.join()).push(() => handler(this.__meta(node), obj, node, storI));
-            node.addEventListener('input', eve => subj[key] = eve.target.value);
+            const EventListener = eve => subj[key] = eve.target.value;
+            this.bindEventListenerStor.set(node, {type: 'input', listener: EventListener});
+            node.addEventListener('input', EventListener);
             idx++;
         }
+    }
+
+    unbindAll () {
+        for (const [node, eventHandlerData] of this.bindEventListenerStor)
+            node.removeEventListener(eventHandlerData.get('type'), eventHandlerData.get('listener'));
+    }
+
+    unbind (node) {
+        let eventHandlerData = this.bindEventListenerStor.get(node);
+        if (eventHandlerData)
+            node.removeEventListener(eventHandlerData.get('type'), eventHandlerData.get('listener'));
     }
 
     __prop2node = toMap();
@@ -187,28 +201,28 @@ class __DOMElement {
         return events.forEach(event => obj[Func.__subscribleVarName].get(event).add(this));
     }
 
-    __proxy_set(prop, incProp, stackKeys) { 
-        const nodes = this.__prop2node.get(prop);
+    __proxy_set(primaryProp, stackKeys) { 
+        const nodes = this.__prop2node.get(primaryProp);
         if (nodes)
             for (const node of nodes) 
-                this.wrapHandler(node, this.sobj[prop], prop);
+                this.wrapHandler(node, this.sobj[primaryProp], primaryProp);
         else {
             let primaryNode = this.__prop2node.get(this.__lastSobjProp);
             if (primaryNode) {
                 let cloneNodes = primaryNode.map(node => node.cloneNode(true));
-                cloneNodes.forEach(newNode => this.wrapHandler(newNode, value, prop))
+                cloneNodes.forEach(newNode => this.wrapHandler(newNode, value, primaryProp))
 
                 primaryNode.forEach((node, i) => {
-                    this.__prop2node.getArr(prop).push(cloneNodes[i]);
+                    this.__prop2node.getArr(primaryProp).push(cloneNodes[i]);
                     node.after(cloneNodes[i]); 
                 });
             }
         }
-        this.bindStor.get(stackKeys.join()).callAll();
+        this.bindStor.get(stackKeys.join())?.callAll();
     }
 
-    __proxy_del(prop) {
-        let nodes = this.__prop2node.get(prop);
+    __proxy_del(primaryProp) {
+        let nodes = this.__prop2node.get(primaryProp);
         if (nodes) 
             for (const node of nodes)
                 node.remove();
