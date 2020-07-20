@@ -68,7 +68,6 @@ class Func {
 
     __proxymer(obj, name) {
         Object.defineProperty(obj, Func.__subscribleVarName, {value: toMap({ set: toSet(), get: toSet(), del: toSet() })});
-
         const setProxy = (sourseObj, primaryProp, primaryObj) => {
              return new Proxy(sourseObj, {
                 set: (target, prop, value, receiver) => {
@@ -180,11 +179,10 @@ class __DOMElement {
         for (const node of elems) {
             let counter = 0;
             const parent = node.parentNode;
-            __adder.unshift({primary: node.cloneNode(true), parent, counter: 0});
+            __adder.unshift({primary: node, parent, counter: 0});
             for (const k in obj) {
                 working = true;
-                let clone = node.cloneNode(true);
-                this.__funcAddNodes(parent, clone, 'before', wrapHandler, obj, k, counter, __adder);
+                this.__funcAddNodes(parent, node.cloneNode(true), 'before', wrapHandler, obj, k, counter, __adder);
                 this.__outInStor.get(obj).set('__wrapHandler', wrapHandler).set('__adder', __adder);
             }
             node.remove();
@@ -201,6 +199,11 @@ class __DOMElement {
     __subscribleProp (obj, events) { 
         return events.split(',').forEach(event => obj[Func.__subscribleVarName].get(event.trim()).add(this));
     }
+	
+	__deleteNode (node) {
+		node.remove();
+        this.elms = this.elms.filter(elm => elm != node);
+	}
 
     __proxy_set(primaryObj, primaryProp, obj, prop, newValue) {
         let outInStor = this.__outInStor.get(primaryObj);
@@ -209,8 +212,7 @@ class __DOMElement {
                 let nodeHandler;
                 if (newValue == null)
                     nodeHandler = params => {
-                        params[0].remove();
-                        this.elms = this.elms.filter(node => node != params[0]);
+						this.__deleteNode(params[0]);
                         outInStor.delete(primaryProp);
                     };
                 else
@@ -221,18 +223,22 @@ class __DOMElement {
             else { clog('add')
                 const adder = outInStor.get('__adder');
                 for (const {primary, parent, counter} of adder) 
-                    this.__funcAddNodes(parent, primary, 'after', outInStor.get('__wrapHandler'), primaryObj, primaryProp, counter + 1, adder);
+                    this.__funcAddNodes(parent, primary.cloneNode(true), 'after', outInStor.get('__wrapHandler'), primaryObj, primaryProp, counter + 1, adder);
             }
         }
 
         this.bindStor.get(obj)?.get(prop)?.callAll();
     }
 
-    __proxy_del(primaryProp, obj, primaryObj) { clog(primaryProp)
-        let outInStor = this.__outInStor.get(primaryObj);
+    __proxy_del(primaryProp, obj, primaryObj) {
+        let outInStor = this.__outInStor.get(primaryObj);  
         let paramsArr;
-        if (outInStor) 
-            if (paramsArr = outInStor.get(primaryProp)) clog(paramsArr);
+        if ((outInStor) && (paramsArr = outInStor.get(primaryProp))) {
+			for (const params of paramsArr) {
+				this.__deleteNode(params[0]);
+				outInStor.delete(primaryProp);
+			}
+		}
     }
 }
 
