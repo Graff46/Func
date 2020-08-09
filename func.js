@@ -186,46 +186,39 @@ class __DOMElement {
 	};
 
 	repeat (obj, handler, nodeHandler) {
-		const h = function(obj, handler, nodeHandler) {
-			this.proxyCalls = false;
-			const wrapHandler = (node, counter, val, key) => handler(this.__meta(node), val, key, node, counter);
-			const __adder = [];
-			this.__outInStor.set(obj, toMap({__wrapHandler: wrapHandler, __adder}));
-	
-			const elems = Array.from(this.elms);
-			this.elms = [];
-			let working = false;
-			for (let node of elems) {
-				let counter = 0;
-				__adder.unshift({primary: node, counter: 0});
-				for (const key in obj) { 
-					working = true;
-					this.__funcAddNodes(node, node.cloneNode(true), wrapHandler, obj, key, counter, __adder, nodeHandler);
-					this.__outInStor.get(obj).set('__wrapHandler', wrapHandler).set('__adder', __adder);
-					counter++;
-				}
-				const referenceNode = document.createElement('meta');
-				referenceNode.setAttribute('func', '');
-				node.after(referenceNode);
-				node.remove();
-				__adder[0].referenceNode = referenceNode;
+		this.proxyCalls = false;
+		const wrapHandler = (node, counter, val, key) => handler(this.__meta(node), val, key, node, counter);
+		const __adder = [];
+		this.__outInStor.set(obj, toMap({__wrapHandler: wrapHandler, __adder}));
+
+		const elems = Array.from(this.elms);
+		this.elms = [];
+		let working = false;
+		for (let node of elems) {
+			let counter = 0;
+			__adder.unshift({primary: node, counter: 0});
+			for (const key in obj) { 
+				working = true;
+				this.__funcAddNodes(node, node.cloneNode(true), wrapHandler, obj, key, counter, __adder, nodeHandler);
+				this.__outInStor.get(obj).set('__wrapHandler', wrapHandler).set('__adder', __adder);
+				counter++;
 			}
-			if (working)
-				this.__subscribleProp(obj, 'set, del');
-			return this;
-		} 
-		return new Proxy({repeat: (nodes, ...args) => el(nodes).repeat(...args)}, {apply(target, thisArg, args) {() => h.apply(thisArg, args)} }); 
-	}
-
-	repeatIn (selector, obj, handler, nodeHandler) {
-		if (this.proxyCalls) return;
-
-		const incl = el(selector).repeat(obj, handler, nodeHandler);
-		this.__outInStor.set(obj, incl.__outInStor.get(obj));
+			const referenceNode = document.createElement('meta');
+			referenceNode.setAttribute('func', '');
+			node.after(referenceNode);
+			node.remove();
+			__adder[0].referenceNode = referenceNode;
+		}
+		if (working)
+			this.__subscribleProp(obj, 'set, del');
+		return this;
 	}
 
 	__meta(node) { 
-		return (...funcs) => funcs.callAll(node);
+		return (...funcs) => {
+			funcs.callAll(node);
+			return {el: selector => el(node.find(selector))};
+		};
 	}
 
 	__subscribleProp (obj, events) { 
