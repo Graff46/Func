@@ -74,10 +74,11 @@ class Func {
 	__setProxy = (sourseObj, primaryProp, primaryObj) => {
 		var proxy = new Proxy(sourseObj, {
 			set: (target, prop, value, receiver) => {
+				const reflect = Reflect.set(target, prop, value, receiver);
 				if (!Func.__exceptedProps(prop)) {
 					this.storProxyCalls.get('set').forEach(itm => itm.__proxy_set(primaryObj ?? receiver, primaryProp ?? prop, receiver, prop, value));
 				}
-				return Reflect.set(target, prop, value, receiver);
+				return reflect;
 			},
 
 			get: (target, prop, receiver) => {
@@ -95,8 +96,9 @@ class Func {
 
 			deleteProperty: (target, prop) => {
 				let reflect = Reflect.deleteProperty(target, prop);
-				if (!Func.__exceptedProps(prop))
-					proxy[Func.__subscribleVarName].get('del').forEach(itm => itm.__proxy_del(primaryProp ?? prop, target, primaryObj ?? target));
+				if (!Func.__exceptedProps(prop)) {
+					this.storProxyCalls.get('del').forEach(itm => itm.__proxy_del(primaryProp ?? prop, target, primaryObj ?? target));
+				}
 				return reflect;
 			}
 		});
@@ -164,13 +166,9 @@ class __DOMElement {
 		let currNode = newNode;
 		wrapHandler(currNode, count, obj[key], key);
 
-		count++;
 		if (!currNode.isConnected) return;
 
 		this.elms.push(currNode);
-
-		//adder[0].counter = count;
-		//return this.__repeatStor.get(obj).getArr(key).push([currNode, count]);
 	};
 
 	repeat (obj, handler) {
@@ -187,16 +185,18 @@ class __DOMElement {
 		const elems = Array.from(this.elms);
 		this.elms = [];
 		let working = false;
+		let newNode;
 		for (let node of elems) {
 			let counter = 0;
 			const key2node = new Map();
 			for (const key in obj) {
 				working = true;
-				key2node.set(key, node);
-				this.__funcAddNodes(node.parentNode, node.cloneNode(true), wrapHandler, obj, key, counter);
+				newNode = node.cloneNode(true);
+				key2node.set(key, newNode);
+				this.__funcAddNodes(node.parentNode, newNode, wrapHandler, obj, key, counter);
 				counter++;
 			}
-			this.__repeatStor.set(obj, toMap({wrapHandler, primary: node, counter, key2node}));
+			this.__repeatStor.set(obj, toMap({wrapHandler, primary: node, counter, parent: node.parentNode, key2node}));
 			node.remove();
 		}
 		if (working) {
@@ -234,28 +234,25 @@ class __DOMElement {
 					} : 
 					() => repeatStor.get('wrapHandler')(nodeList.get(primaryProp), repeatStor.get('counter'), primaryObj[primaryProp], primaryProp);
 				return nodeHandler();
-				}
+			} else {
+				const counter = repeatStor.get('counter');
+				this.__funcAddNodes(repeatStor.get('parent'), repeatStor.get('primary').cloneNode(true), repeatStor.get('wrapHandler'),
+					primaryObj, primaryProp, counter);
+				repeatStor.set('counter', counter++);
 			}
-			else {clog(22)
-				this.__funcAddNodes(repeatStor.get('parentNode'), repeatStor.get('primary').cloneNode(true), repeatStor.get('wrapHandler'),
-					primaryObj, primaryProp, repeatStor.get('counter'));
 		}
 
 		this.bindStor.get(obj)?.get(prop)?.callAll();
-
-		if (this.__repeatStor.get(obj))
-			this.__proxy_set(obj, prop, obj[prop], prop, newValue);
 	}
 
-	__proxy_del(primaryProp, obj, primaryObj) { clog(primaryProp, obj, primaryObj)
+	__proxy_del(primaryProp, obj, primaryObj) {
 		this.proxyCalls = true;
-		let repeatStor = this.__repeatStor.get(primaryObj);  
-		let paramsArr;
-		if ((repeatStor) && (paramsArr = repeatStor.get(primaryProp))) {
-			for (const params of paramsArr) {
-				this.__deleteNode(params[0]);
-				repeatStor.delete(primaryProp);
-			}
+		const repeatStor = this.__repeatStor.get(primaryObj);
+		const nodeList = repeatStor.get('key2node');  
+		const node = nodeList.get(primaryProp);
+		if (Boolean(repeatStor) && Boolean(node)) {
+			this.__deleteNode(node);
+			nodeList.delete(primaryProp);
 		}
 	}
 }
