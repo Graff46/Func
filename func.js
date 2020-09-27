@@ -126,6 +126,13 @@ class __DOMElement {
 	bindStor = toMap();
 
 	bind (obj, handler) {
+		if (obj instanceof Func) {
+			if (!Boolean(this.app)) {
+				this.app = obj
+			}
+			obj = this.app.data;
+		}
+
 		let lastKey = [];
 		let lastObj = obj;
 		const setWkey = subj => { 
@@ -224,8 +231,9 @@ class __DOMElement {
 	__proxy_set(primaryObj, primaryProp, obj, prop, newValue) {
 		this.proxyCalls = true;
 		const repeatStor = this.__repeatStor.get(primaryObj);
-		const nodeList = repeatStor.get('key2node');
+
 		if (repeatStor) {
+			const nodeList = repeatStor.get('key2node');
 			if (nodeList.has(primaryProp)) {
 				const nodeHandler = (newValue == null) ? 
 					() => {
