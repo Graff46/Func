@@ -3,7 +3,7 @@
 //////////////////////////////////////////////////////////////////////
 
 //let obj = {io: {h: -1} };
-let obj ={class: "tyuiop", ll: 99, io: {h: -1}, gg: {h: 987}};
+let obj ={io: {l: -1}, gg: {h: 987}};
 
 const app = new Func(obj);
 

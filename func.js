@@ -236,7 +236,7 @@ class __DOMElement {
 				return nodeHandler();
 				}
 			}
-			else { 
+			else {clog(22)
 				this.__funcAddNodes(repeatStor.get('parentNode'), repeatStor.get('primary').cloneNode(true), repeatStor.get('wrapHandler'),
 					primaryObj, primaryProp, repeatStor.get('counter'));
 		}
