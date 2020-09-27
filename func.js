@@ -55,178 +55,209 @@ const value = val => node => node.value = val ?? '';
 const setProp = (propName, propValue) => node => node[propName] = propValue;
 
 class Func {
-    constructor (inclData, callHandler) {
-        toMap(inclData).forEach((dataUnit, name) => this.__proxymer(dataUnit, name), this);
-        callHandler?.call(this, this);
-    }
+	constructor (inclData, callHandler) {
+		this.source = inclData;
+		this.data = this.__setProxy(inclData);
+		this.maskProxy = new WeakMap();
+		this.storProxyCalls = toMap({ set: toSet(), get: toSet(), del: toSet() });
 
-    static __subscribleVarName = '__subs';
-    static __isProxyVarName = '__isProxy';
-    static __exceptedProps(propName) {
-        return Boolean(([Func.__isProxyVarName, Func.__subscribleVarName].includes(propName)) || (propName in Object.prototype));
-    }
+		callHandler?.call(this, this);
+	}
 
-    __proxymer(obj, name) {
-        Object.defineProperty(obj, Func.__subscribleVarName, {value: toMap({ set: toSet(), get: toSet(), del: toSet() })});
+	static __subscribleVarName = '__subs';
+	static __isProxyVarName = '__isProxy';
 
-        const setProxy = (sourseObj, sourseProp, stackKeys) => {
-             return new Proxy(sourseObj, {
-                set: (target, prop, value, ...args) => { 
-                    let reflect = Reflect.set(target, prop, value, ...args);
-                    Object.defineProperty(sourseObj, Func.__isProxyVarName, {value: true});
-                    if (!Func.__exceptedProps(prop)) 
-                        obj[Func.__subscribleVarName].get('set').forEach(itm => itm.__proxy_set(sourseProp ?? prop, [prop].concat(stackKeys) ));
-                    return reflect;
-                },
+	static __exceptedProps(propName) {
+		return Boolean(([Func.__isProxyVarName, Func.__subscribleVarName].includes(propName)) || (propName in Object.prototype));
+	}
 
-                get: (target, prop, ...args) => {
-                    stackKeys = [];
-                    if ((target[prop] instanceof Object) && (!Func.__exceptedProps(prop))) {
-                        stackKeys.unshift(prop);
-                        return setProxy(Reflect.get(target, prop, ...args), sourseProp ?? prop, stackKeys);
-                    }
+	__setProxy = (sourseObj, primaryProp, primaryObj) => {
+		var proxy = new Proxy(sourseObj, {
+			set: (target, prop, value, receiver) => {
+				if (!Func.__exceptedProps(prop)) {
+					this.storProxyCalls.get('set').forEach(itm => itm.__proxy_set(primaryObj ?? receiver, primaryProp ?? prop, receiver, prop, value));
+				}
+				return Reflect.set(target, prop, value, receiver);
+			},
 
-                    return Reflect.get(target, prop, ...args);
-                },
+			get: (target, prop, receiver) => {
+				if ((target[prop] instanceof Object) && (!Func.__exceptedProps(prop))) {
+					const valueProxy = this.maskProxy.get(target[prop]);
+					if (Boolean(valueProxy)) {
+						return valueProxy;
+					}
+					const cashProxy = this.__setProxy(Reflect.get(target, prop, receiver), primaryProp ?? prop, primaryObj ?? receiver);
+					this.maskProxy.set(target[prop], cashProxy);
+					return cashProxy;
+				}
+				return Reflect.get(target, prop, receiver);
+			},
 
-                deleteProperty: (target, prop, ...args) => {
-                    let reflect = Reflect.deleteProperty(target, prop, ...args);
-                    stackKeys.unshift(prop);
-                    Object.defineProperty(sourseObj, Func.__isProxyVarName, {value: true});
-                    if (!Func.__exceptedProps(prop)) 
-                        obj[Func.__subscribleVarName].get('del').forEach(itm => itm.__proxy_del(prop, [prop].concat(stackKeys)));
-                    return reflect;
-                },
-            });
-        };
-
-        this[name] = setProxy(obj);
-    }
+			deleteProperty: (target, prop) => {
+				let reflect = Reflect.deleteProperty(target, prop);
+				if (!Func.__exceptedProps(prop))
+					proxy[Func.__subscribleVarName].get('del').forEach(itm => itm.__proxy_del(primaryProp ?? prop, target, primaryObj ?? target));
+				return reflect;
+			}
+		});
+		return proxy;
+	};
 }
 
 class __DOMElement {
-    constructor(selector, ...funcs) {
-        this.elms = Array.from(document.querySelectorAll(selector));
-        for (const func of funcs) 
-            for (const node of this.elms)
-                func(node);
-    }
+	constructor(selector, __app) {
+		if (selector instanceof Node) 
+			this.elms = [selector];
+		else if (selector instanceof NodeList)
+			this.elms = Array.from(selector);
+		else
+			this.elms = Array.from(document.querySelectorAll(selector));
 
-    splice (...arg) {
-        this.elms.splice(...arg);
-        return this;
-    }
+			this.app = __app;
+	}
 
-    bindStor = toMap();
-    bindEventListenerStor = toMap();
+	splice (...arg) {
+		this.elms.splice(...arg);
+		return this;
+	}
 
-    bind (obj, handler) {
-        let wkey = [];
-        let inclObj = obj;
-        const setWkey = subj => { 
-            return new Proxy(subj, {
-                get: (tar, prop, ...args) => {
-                    wkey.unshift(prop);
-                    if (tar[prop] instanceof Object) {
-                        inclObj = inclObj[prop]; 
-                        return setWkey(Reflect.get(tar, prop, ...args));
-                    }
-                    return Reflect.get(tar, prop, ...args);
-            }});
-        }
+	bindStor = toMap();
 
-        this.__subscribleProp(obj, 'set');
-        
-        const sobj = setWkey(obj); 
-        let idx = 0;
-        for (const node of this.elms) {
-            inclObj = obj;
-            wkey = [];
-            handler(this.__meta(node), sobj, node, idx);
+	bind (obj, handler) {
+		let lastKey = [];
+		let lastObj = obj;
+		const setWkey = subj => { 
+			return new Proxy(subj, {
+				get: (tar, prop, ...args) => {
+					lastKey = prop;
+					if (tar[prop] instanceof Object) {
+						lastObj = lastObj[prop]; 
+						return setWkey(Reflect.get(tar, prop, ...args));
+					}
+					return Reflect.get(tar, prop, ...args);
+			}});
+		}
 
-            let [subj, key] = [inclObj, wkey[0]];
-            let storI = idx;
-            this.bindStor.getArr(wkey.join()).push(() => handler(this.__meta(node), obj, node, storI));
-            const EventListener = eve => subj[key] = eve.target.value;
-            this.bindEventListenerStor.set(node, {type: 'input', listener: EventListener});
-            node.addEventListener('input', EventListener);
-            idx++;
-        }
-    }
+		this.__subscribleProp(obj, 'set, del');
+		
+		const sobj = setWkey(obj); 
+		let idx = 0
+		for (const node of this.elms) {
+			lastObj = obj;
+			handler(this.__meta(node), sobj, node, idx);
 
-    unbindAll () {
-        for (const [node, eventHandlerData] of this.bindEventListenerStor)
-            node.removeEventListener(eventHandlerData.get('type'), eventHandlerData.get('listener'));
-    }
+			let [currentObj, currentKey] = [lastObj, lastKey];
+			let storI = idx;
+			if (!this.bindStor.has(currentObj))
+				this.bindStor.set(currentObj, toMap());
+			this.bindStor.get(currentObj).getArr(currentKey).push(() => handler(this.__meta(node), obj, node, storI));
+			node.addEventListener('input', eve => currentObj[currentKey] = eve.target.value);
+			idx++;
+		}
+	}
 
-    unbind (node) {
-        let eventHandlerData = this.bindEventListenerStor.get(node);
-        if (eventHandlerData)
-            node.removeEventListener(eventHandlerData.get('type'), eventHandlerData.get('listener'));
-    }
+	__repeatStor = toMap();
 
-    __prop2node = toMap();
+	__funcAddNodes (parentNode, newNode, wrapHandler, obj, key, count) {
+		parentNode.append(newNode);
 
-    outIn (obj, handler) {
-        this.sobj = obj;
-        this.wrapHandler;
-        this.__lastSobjProp;
+		let currNode = newNode;
+		wrapHandler(currNode, count, obj[key], key);
 
-        for (const node of this.elms) { 
-            this.elms = [];
-            for (const k in this.sobj) { 
-                let clone = node.cloneNode(true);
-                if (this.sobj == null) continue;
-                this.elms.push(clone);
+		count++;
+		if (!currNode.isConnected) return;
 
-                this.wrapHandler = (wnode, val, key) => handler(this.__meta(wnode), val, key);
-                this.__prop2node.getArr(k).push(clone);
-                this.__lastSobjProp = k;
+		this.elms.push(currNode);
 
-                this.__subscribleProp(this.sobj, 'set', 'del');
+		//adder[0].counter = count;
+		//return this.__repeatStor.get(obj).getArr(key).push([currNode, count]);
+	};
 
-                this.wrapHandler(clone, this.sobj[k], k);
-                node.before(clone);
-            }
-            node.remove();
-        }
-        return this;
-    }
+	repeat (obj, handler) {
+		if (obj instanceof Func) {
+			if (!Boolean(this.app)) {
+				this.app = obj
+			}
+			obj = this.app.data;
+		}
 
-    __meta(node) { 
-        return (...funcs) => funcs.callAll(node);
-    }
+		this.proxyCalls = false;
+		const wrapHandler = (node, counter, val, key) => handler(this.__meta(node), val, key, node, counter);
 
-    __subscribleProp(obj, ...events) { 
-        return events.forEach(event => obj[Func.__subscribleVarName].get(event).add(this));
-    }
+		const elems = Array.from(this.elms);
+		this.elms = [];
+		let working = false;
+		for (let node of elems) {
+			let counter = 0;
+			const key2node = new Map();
+			for (const key in obj) {
+				working = true;
+				key2node.set(key, node);
+				this.__funcAddNodes(node.parentNode, node.cloneNode(true), wrapHandler, obj, key, counter);
+				counter++;
+			}
+			this.__repeatStor.set(obj, toMap({wrapHandler, primary: node, counter, key2node}));
+			node.remove();
+		}
+		if (working) {
+			this.__subscribleProp(obj, 'set, del');
+		}
+		return this;
+	}
 
-    __proxy_set(primaryProp, stackKeys) { 
-        const nodes = this.__prop2node.get(primaryProp);
-        if (nodes)
-            for (const node of nodes) 
-                this.wrapHandler(node, this.sobj[primaryProp], primaryProp);
-        else {
-            let primaryNode = this.__prop2node.get(this.__lastSobjProp);
-            if (primaryNode) {
-                let cloneNodes = primaryNode.map(node => node.cloneNode(true));
-                cloneNodes.forEach(newNode => this.wrapHandler(newNode, value, primaryProp))
+	__meta(node) { 
+		return (...funcs) => {
+			funcs.callAll(node);
+			return {el: selector => new __DOMElement(node.find(selector), this.app)};
+		};
+	}
 
-                primaryNode.forEach((node, i) => {
-                    this.__prop2node.getArr(primaryProp).push(cloneNodes[i]);
-                    node.after(cloneNodes[i]); 
-                });
-            }
-        }
-        this.bindStor.get(stackKeys.join())?.callAll();
-    }
+	__subscribleProp (obj, events) { 
+		return events.split(',').forEach(event => this.app.storProxyCalls.get(event.trim()).add(this));
+	}
+	
+	__deleteNode (node) {
+		node.remove();
+		this.elms = this.elms.filter(elm => elm != node);
+	}
 
-    __proxy_del(primaryProp) {
-        let nodes = this.__prop2node.get(primaryProp);
-        if (nodes) 
-            for (const node of nodes)
-                node.remove();
-    }
+	__proxy_set(primaryObj, primaryProp, obj, prop, newValue) {
+		this.proxyCalls = true;
+		const repeatStor = this.__repeatStor.get(primaryObj);
+		const nodeList = repeatStor.get('key2node');
+		if (repeatStor) {
+			if (nodeList.has(primaryProp)) {
+				const nodeHandler = (newValue == null) ? 
+					() => {
+						this.__deleteNode(nodeList.get(primaryProp));
+						nodeList.delete(primaryProp);
+					} : 
+					() => repeatStor.get('wrapHandler')(nodeList.get(primaryProp), repeatStor.get('counter'), primaryObj[primaryProp], primaryProp);
+				return nodeHandler();
+				}
+			}
+			else { 
+				this.__funcAddNodes(repeatStor.get('parentNode'), repeatStor.get('primary').cloneNode(true), repeatStor.get('wrapHandler'),
+					primaryObj, primaryProp, repeatStor.get('counter'));
+		}
+
+		this.bindStor.get(obj)?.get(prop)?.callAll();
+
+		if (this.__repeatStor.get(obj))
+			this.__proxy_set(obj, prop, obj[prop], prop, newValue);
+	}
+
+	__proxy_del(primaryProp, obj, primaryObj) { clog(primaryProp, obj, primaryObj)
+		this.proxyCalls = true;
+		let repeatStor = this.__repeatStor.get(primaryObj);  
+		let paramsArr;
+		if ((repeatStor) && (paramsArr = repeatStor.get(primaryProp))) {
+			for (const params of paramsArr) {
+				this.__deleteNode(params[0]);
+				repeatStor.delete(primaryProp);
+			}
+		}
+	}
 }
 
 const el = (selector, ...funcs) => new __DOMElement(selector, ...funcs);

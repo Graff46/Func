@@ -5,7 +5,11 @@
 //let obj = {io: {h: -1} };
 let obj ={class: "tyuiop", ll: 99, io: {h: -1}, gg: {h: 987}};
 
-const app = new Func({mytest: obj});
+const app = new Func(obj);
 
-//let yy = el('.p').outIn(app.mytest, (node, v, k) => node(content(v.h), id(k)))
-el('.txt').bind(app.mytest, (exe, data, node, i) => (i%2)? exe(value(data.io.h)): exe(value(data.gg.h)));
+var r = el('ol>li').repeat(app, (exe, v, k, node, i) => {
+	exe(addClass(k), content(v.h || v.l))//.el('p').repeat(v, (exe2, v, k) => exe2(content(v)));
+	//el(node.find('p')).repeat(v, (exe2, k)=>exe2(content(k)));
+})
+
+//el('.txt').bind(app.mytest, (exe, data, node, i) => (i%2)? exe(value(data.io.h)): exe(value(data.gg.h)));
