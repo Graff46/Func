@@ -12,4 +12,9 @@ const app = new Func(obj);
 // 	//el(node.find('p')).repeat(v, (exe2, k)=>exe2(content(k)));
 // })
 
+el('.li').repeat(app, (exe, v, k) => exe(content(k)))
+
+// TODO 
+el('.li').repeat(app, (exe, v, k) => exe(content(k))).inRepeat('.li>.itm', ()=>_);
+
 el('.txt').bind(app, (exe, data, node, i) => (i%2)? exe(value(data.io.l)): exe(value(data.gg.h)));

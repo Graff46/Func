@@ -82,16 +82,17 @@ class Func {
 			},
 
 			get: (target, prop, receiver) => {
-				if ((target[prop] instanceof Object) && (!Func.__exceptedProps(prop))) {
-					const valueProxy = this.maskProxy.get(target[prop]);
+				const value = Reflect.get(target, prop, receiver);
+				if ((value instanceof Object) && (!Func.__exceptedProps(prop))) {
+					const valueProxy = this.maskProxy.get(value);
 					if (Boolean(valueProxy)) {
 						return valueProxy;
 					}
 					const cashProxy = this.__setProxy(Reflect.get(target, prop, receiver), primaryProp ?? prop, primaryObj ?? receiver);
-					this.maskProxy.set(target[prop], cashProxy);
+					this.maskProxy.set(value, cashProxy);
 					return cashProxy;
 				}
-				return Reflect.get(target, prop, receiver);
+				return value
 			},
 
 			deleteProperty: (target, prop) => {
