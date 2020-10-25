@@ -36,6 +36,10 @@ Object.defineProperty(Object.prototype, 'proxymer', {value:
     }
 });
 
+Node.prototype.find = function(selector) {
+	return this.querySelectorAll(selector);
+}
+
 const empty = function(){};
 
 const toMap = obj => obj ? new Map(Object.entries(obj)) : new Map();
@@ -62,6 +66,16 @@ class Func {
 		this.storProxyCalls = toMap({ set: toSet(), get: toSet(), del: toSet() });
 
 		callHandler?.call(this, this);
+
+		return new Proxy(this, {
+			get: (target, prop, receiver) => {
+				if (prop in target) {
+					return Reflect.get(target, prop, receiver);
+				} else {
+					return Reflect.get(this.data, prop, receiver)
+				}
+			}
+		});
 	}
 
 	static __subscribleVarName = '__subs';
@@ -166,20 +180,19 @@ class __DOMElement {
 		}
 	}
 
-	__repeatStor = toMap();
-
 	__funcAddNodes (parentNode, newNode, wrapHandler, obj, key, count) {
 		parentNode.append(newNode);
 
-		let currNode = newNode;
-		wrapHandler(currNode, count, obj[key], key);
+		wrapHandler(newNode, count, obj[key], key);
 
-		if (!currNode.isConnected) return;
+		if (!newNode.isConnected) return;
 
-		this.elms.push(currNode);
+		this.elms.push(newNode);
 	};
 
-	repeat (obj, handler) {
+	__repeatStor = toMap();
+
+	repeat (obj, handler, prs) {
 		if (obj instanceof Func) {
 			if (!Boolean(this.app)) {
 				this.app = obj
@@ -194,24 +207,55 @@ class __DOMElement {
 		this.elms = [];
 		let working = false;
 		let newNode;
-		for (let node of elems) {
-			let counter = 0;
-			const key2node = new Map();
-			for (const key in obj) {
-				working = true;
-				newNode = node.cloneNode(true);
-				key2node.set(key, newNode);
-				this.__funcAddNodes(node.parentNode, newNode, wrapHandler, obj, key, counter);
-				counter++;
+
+		this.temp = empty;
+		const accum = prs || [];
+
+		const main = () => {
+			const nextSliceProps = accum.slice(1);
+			const nextProps = accum[0]
+			for (let node of elems) {
+				let counter = 0;
+				const key2node = new Map();
+				for (const key in obj) {
+					working = true;
+					newNode = node.cloneNode(true);
+					key2node.set(key, newNode);
+					this.__funcAddNodes(node.parentNode, newNode, wrapHandler, obj, key, counter);
+
+					this.temp(newNode, obj[key], nextProps, nextSliceProps);
+
+					counter++;
+				}
+				this.__repeatStor.set(obj, toMap({wrapHandler, primary: node, counter, parent: node.parentNode, key2node}));
+				node.remove();
 			}
-			this.__repeatStor.set(obj, toMap({wrapHandler, primary: node, counter, parent: node.parentNode, key2node}));
-			node.remove();
-		}
-		if (working) {
-			this.__subscribleProp(obj, 'set, del');
-		}
-		return this;
-	}
+
+			if (working) {
+				this.__subscribleProp(obj, 'set, del');
+			}
+
+			return this;
+		};
+
+		const test = (elems, callback) => {
+			if (Boolean(elems) && Boolean(callback)) {
+				accum.push({elems, callback});
+
+				return test;
+			} else {
+				this.temp = (node, data, nextProps, follwn) => Boolean(nextProps) ?
+					new __DOMElement(node.find(nextProps.elems), this.app).repeat(data, nextProps.callback, follwn)() : null;
+				};
+				return main();
+			}
+
+		return test;
+	};
+
+	__mainTest() {
+
+	};
 
 	__meta(node) { 
 		return (...funcs) => {
