@@ -124,17 +124,17 @@ class Func {
 class __DOMElement {
 	constructor(selector, __app) {
 		if (selector instanceof Node) 
-			this.elms = [selector];
+			this.elements = [selector];
 		else if (selector instanceof NodeList)
-			this.elms = Array.from(selector);
+			this.elements = Array.from(selector);
 		else
-			this.elms = Array.from(document.querySelectorAll(selector));
+			this.elements = Array.from(document.querySelectorAll(selector));
 
 			this.app = __app;
 	}
 
 	splice (...arg) {
-		this.elms.splice(...arg);
+		this.elements.splice(...arg);
 		return this;
 	}
 
@@ -150,23 +150,23 @@ class __DOMElement {
 
 		let lastKey = [];
 		let lastObj = obj;
-		const setWkey = subj => { 
-			return new Proxy(subj, {
-				get: (tar, prop, ...args) => {
+		const proxy = xobj => { 
+			return new Proxy(xobj, {
+				get: (target, prop, receiver) => {
 					lastKey = prop;
-					if (tar[prop] instanceof Object) {
+					if (target[prop] instanceof Object) {
 						lastObj = lastObj[prop]; 
-						return setWkey(Reflect.get(tar, prop, ...args));
+						return proxy(Reflect.get(target, prop, receiver));
 					}
-					return Reflect.get(tar, prop, ...args);
+					return Reflect.get(target, prop, receiver);
 			}});
 		}
 
-		this.__subscribleProp(obj, 'set, del');
+		this.__subscribleProp('set, del');
 		
-		const sobj = setWkey(obj); 
+		const sobj = proxy(obj); 
 		let idx = 0
-		for (const node of this.elms) {
+		for (const node of this.elements) {
 			lastObj = obj;
 			handler(this.__meta(node), sobj, node, idx);
 
@@ -182,38 +182,31 @@ class __DOMElement {
 
 	__funcAddNodes (parentNode, newNode, wrapHandler, obj, key, count) {
 		parentNode.append(newNode);
-
 		wrapHandler(newNode, count, obj[key], key);
-
 		if (!newNode.isConnected) return;
-
-		this.elms.push(newNode);
+		this.elements.push(newNode);
 	};
 
 	__repeatStor = toMap();
 
 	repeat (obj, handler, prs) {
 		if (obj instanceof Func) {
-			if (!Boolean(this.app)) {
-				this.app = obj
-			}
+			this.app = obj;
 			obj = this.app.data;
 		}
 
 		this.proxyCalls = false;
 		const wrapHandler = (node, counter, val, key) => handler(this.__meta(node), val, key, node, counter);
 
-		const elems = Array.from(this.elms);
-		this.elms = [];
+		const elems = Array.from(this.elements);
+		this.elements = [];
 		let working = false;
 		let newNode;
-
-		this.temp = empty;
+		let nestedHandler = empty;
 		const accum = prs || [];
 
 		const main = () => {
 			const nextSliceProps = accum.slice(1);
-			const nextProps = accum[0]
 			for (let node of elems) {
 				let counter = 0;
 				const key2node = new Map();
@@ -223,38 +216,30 @@ class __DOMElement {
 					key2node.set(key, newNode);
 					this.__funcAddNodes(node.parentNode, newNode, wrapHandler, obj, key, counter);
 
-					this.temp(newNode, obj[key], nextProps, nextSliceProps);
-
+					nestedHandler(newNode, obj[key], accum[0], nextSliceProps);
 					counter++;
 				}
 				this.__repeatStor.set(obj, toMap({wrapHandler, primary: node, counter, parent: node.parentNode, key2node}));
 				node.remove();
 			}
 
-			if (working) {
-				this.__subscribleProp(obj, 'set, del');
-			}
-
+			if (working) this.__subscribleProp('set, del');
 			return this;
 		};
 
-		const test = (elems, callback) => {
+		const tailCallback = (elems, callback) => {
 			if (Boolean(elems) && Boolean(callback)) {
 				accum.push({elems, callback});
 
-				return test;
+				return tailCallback;
 			} else {
-				this.temp = (node, data, nextProps, follwn) => Boolean(nextProps) ?
-					new __DOMElement(node.find(nextProps.elems), this.app).repeat(data, nextProps.callback, follwn)() : null;
+				nestedHandler = (node, data, nextProps, follwn) => Boolean(nextProps) ?
+					new __DOMElement(node.find(nextProps.elems)).repeat(new Func(data), nextProps.callback, follwn)() : null;
 				};
 				return main();
 			}
 
-		return test;
-	};
-
-	__mainTest() {
-
+		return tailCallback;
 	};
 
 	__meta(node) { 
@@ -264,16 +249,16 @@ class __DOMElement {
 		};
 	}
 
-	__subscribleProp (obj, events) { 
+	__subscribleProp (events) {
 		return events.split(',').forEach(event => this.app.storProxyCalls.get(event.trim()).add(this));
 	}
 	
 	__deleteNode (node) {
 		node.remove();
-		this.elms = this.elms.filter(elm => elm != node);
+		this.elements = this.elements.filter(elm => elm != node);
 	}
 
-	__proxy_set(primaryObj, primaryProp, obj, prop, newValue) {
+	__proxy_set(primaryObj, primaryProp, obj, prop, newValue) {clog(this)
 		this.proxyCalls = true;
 		const repeatStor = this.__repeatStor.get(primaryObj);
 
